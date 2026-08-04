@@ -1,0 +1,40 @@
+# ManaPOS Windows packaging — electron-builder configuration.
+#
+# Produces release/ManaPOS-Setup-<version>.exe: a one-click NSIS installer.
+#   npm run dist
+#
+# Per-user install on purpose: no admin rights needed on a customer's PC,
+# which matters when installing on till machines mid-demo. Business folders
+# (%APPDATA%\ManaPOS, Documents\POS Reports\...) are created by the app
+# itself on first launch — the installer only drops program files.
+
+appId: com.manapos.app
+productName: ManaPOS
+copyright: Copyright © 2026 ManaPOS
+
+directories:
+  output: release
+
+# Only the compiled app + its production dependencies ship. package.json and
+# production node_modules are always collected by electron-builder itself.
+files:
+  - dist/**
+
+# CRITICAL: better-sqlite3 ships as a prebuilt binary matched to the pinned
+# Electron ABI (see `npm run install:sqlite`). Rebuilding from source would
+# need C++ build tools and could target the wrong ABI — never do it here.
+npmRebuild: false
+
+asar: true
+
+win:
+  target: nsis
+  icon: build/icon.png
+
+nsis:
+  oneClick: true
+  perMachine: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: ManaPOS
+  artifactName: ManaPOS-Setup-${version}.${ext}
