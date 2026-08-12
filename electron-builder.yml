@@ -1,7 +1,9 @@
-# ManaPOS Windows packaging — electron-builder configuration.
+# ManaPOS packaging — electron-builder configuration (linux branch).
 #
-# Produces release/ManaPOS-Setup-<version>.exe: a one-click NSIS installer.
-#   npm run dist
+#   npm run dist        -> release/ManaPOS-Setup-<version>.exe (Windows NSIS)
+#   npm run dist:linux  -> release/ManaPOS-<version>.AppImage + .deb (Linux)
+#
+# Windows installer notes:
 #
 # Per-user install on purpose: no admin rights needed on a customer's PC,
 # which matters when installing on till machines mid-demo. Business folders
@@ -29,6 +31,16 @@ asar: true
 
 win:
   target: nsis
+  icon: build/icon.png
+
+# Linux targets (linux branch). AppImage runs on any distro; deb integrates
+# with apt on Debian/Ubuntu. The existing 512x512 build/icon.png already
+# satisfies electron-builder's Linux icon requirement.
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Office
   icon: build/icon.png
 
 nsis:

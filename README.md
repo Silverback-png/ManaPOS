@@ -1,13 +1,17 @@
 # ManaPOS
 
-A professional desktop Point of Sale (POS) application for Windows, built for
+A professional desktop Point of Sale (POS) application for Linux, built for
 retail environments that need speed, reliability and complete offline operation.
 
-> **Status:** Version 1.0.0 — feature complete, packaged for Windows.
+> **Status:** Version 1.0.0 — feature complete, packaged for Linux.
+>
+> **Branch:** `linux` — the Linux (Debian/Ubuntu) build. The Windows version
+> lives on the `main` branch. Both share identical application code; only
+> packaging, npm scripts and documentation differ.
 
 ## Overview
 
-ManaPOS is a **pure desktop application**. It runs as a native Windows program
+ManaPOS is a **pure desktop application**. It runs as a native Linux program
 (Electron bundles Chromium + Node.js into a single executable) and stores all
 data locally in SQLite. There is no web server, no cloud dependency and no
 internet requirement.
@@ -18,10 +22,10 @@ internet requirement.
 - Product management (add / edit / deactivate / search / filter — never hard-delete)
 - Point of Sale screen (category rail, product grid, cart)
 - Checkout (cash / card; mixed payments placeholder)
-- Automatic PDF receipts saved to `Documents/POS Reports/Sales/`
+- Automatic PDF receipts saved to `~/Documents/POS Reports/Sales/`
 - Voids protected by manager PIN, with a full audit log
-- End of Day reports saved to `Documents/POS Reports/End Of Day/`
-- Automatic database backups saved to `Documents/POS Reports/Backups/`
+- End of Day reports saved to `~/Documents/POS Reports/End Of Day/`
+- Automatic database backups saved to `~/Documents/POS Reports/Backups/`
 - Settings (business details, VAT %, receipt footer, manager PIN, currency symbol)
 
 Explicitly out of scope for v1 (the architecture is prepared for them):
@@ -59,13 +63,26 @@ src/
     lib/           Typed API wrapper, formatting helpers
 ```
 
-## Prerequisites
+## Prerequisites (Linux)
 
-- Windows 10/11
+- Debian 12 / Ubuntu 22.04 or newer (any distro with a recent glibc works)
 - Node.js 20+
+- Electron runtime libraries (present on any desktop system; needed explicitly
+  on minimal/container installs):
+
+  ```bash
+  sudo apt install -y libgtk-3-0 libnss3 libasound2
+  ```
+
+  To *run* an AppImage you additionally need FUSE:
+
+  ```bash
+  sudo apt install -y fuse libfuse2
+  ```
 
 No C++ build tools are required: `better-sqlite3` is installed from an
-official prebuilt binary matched to the Electron ABI (see `install:sqlite`).
+official prebuilt binary matched to the Electron ABI (see `install:sqlite`) —
+`prebuild-install` automatically selects the linux-x64 prebuilt on Linux.
 For this to work, the Electron major version is pinned to one with a published
 prebuilt — do not upgrade Electron without checking prebuilt availability.
 
@@ -81,49 +98,90 @@ prebuilt — do not upgrade Electron without checking prebuilt availability.
 | `npm run install:sqlite`| Re-fetch the better-sqlite3 prebuilt binary for Electron       |
 | `npm run icon`          | Regenerate the app icon (`build/icon.png`)                     |
 | `npm run pack`          | Build + package to an unpacked dir (no installer, for testing) |
-| `npm run dist`          | Build + package the Windows installer into `release/`          |
+| `npm run dist:linux`    | Build + package AppImage + .deb into `release/`                |
+| `npm run dist`          | Build + package the Windows installer (Windows hosts only)     |
 
 > Use `npm run setup` for the first install (and after upgrading Electron or
 > better-sqlite3). It installs with `--ignore-scripts` because better-sqlite3's
 > own install script targets Node, not Electron. Plain `npm install <pkg>` is
 > fine when adding day-to-day dependencies afterwards.
 
-## Packaging (Windows installer)
+## Packaging (AppImage + .deb)
 
-`npm run dist` compiles the app and produces a one-click NSIS installer at
-`release/ManaPOS-Setup-<version>.exe` (configuration: `electron-builder.yml`).
+`npm run dist:linux` compiles the app and produces two artifacts in `release/`
+(configuration: `electron-builder.yml`):
 
-- **Per-user install** — no admin rights needed on the customer's PC. Lands in
-  `%LOCALAPPDATA%\Programs\ManaPOS` with Desktop + Start Menu shortcuts and a
-  standard uninstaller (Windows Settings → Apps).
+- `ManaPOS-<version>.AppImage` — portable, runs on any distro
+- `ManaPOS_<version>_amd64.deb` — integrates with apt (menu entry, icon)
+
 - The native SQLite module ships as the pinned Electron prebuilt
   (`npmRebuild: false`) — never let the packager rebuild it from source.
-- The first packaging run downloads the NSIS toolchain once (network
+- The first packaging run downloads the AppImage/deb toolchain once (network
   required); afterwards packaging works fully offline.
-- The installer is **unsigned**, so Windows SmartScreen shows
-  "Windows protected your PC" on first run → **More info → Run anyway**.
-  (A code-signing certificate removes this; out of scope for v1.)
+- The packages are **unsigned** — expected for an internal v1.
 
-## Installing on a customer's PC
+## Installing on a till PC
 
-1. Copy `ManaPOS-Setup-<version>.exe` onto the PC and run it.
-2. Launch ManaPOS from the Desktop shortcut. First launch automatically
-   creates the database and report folders (see Data Locations) with default
-   settings and an open business day — no setup required.
-3. Configure business details, VAT %, manager PIN and currency symbol under
-   **Settings**, then add categories and products.
+**AppImage:**
 
-The database starts empty by design — no demo data ships with the installer.
+```bash
+chmod +x ManaPOS-<version>.AppImage
+./ManaPOS-<version>.AppImage
+```
+
+**Debian/Ubuntu package:**
+
+```bash
+sudo apt install ./release/ManaPOS_<version>_amd64.deb
+```
+
+First launch automatically creates the database and report folders (see Data
+Locations) with default settings and an open business day — no setup required.
+Configure business details, VAT %, manager PIN and currency symbol under
+**Settings**, then add categories and products.
+
+The database starts empty by design — no demo data ships with the packages.
+
+## Running inside an LXC container (Proxmox)
+
+**Building** in a headless Debian 12 container works exactly as described
+above — no display is needed for `npm run setup`, `npm run build` or
+`npm run dist:linux`.
+
+**Running** the app is different: Electron is a GUI application and needs a
+display. In a container that means one of:
+
+- X11 forwarding: `ssh -X user@container` (install `xauth` in the container)
+- A lightweight desktop + remote access (e.g. XFCE + x11vnc or RDP)
+- Or simply run the AppImage on any Linux desktop instead
+
+If Chromium's sandbox is blocked inside the container (typical error mentions
+`SUID sandbox` or `user namespace`), either launch with `--no-sandbox`:
+
+```bash
+./ManaPOS-<version>.AppImage --no-sandbox
+```
+
+or allow unprivileged user namespaces on the container:
+
+```bash
+sysctl -w kernel.unprivileged_userns_clone=1
+```
+
+For a local, trusted, offline POS app, `--no-sandbox` is an acceptable
+pragmatic choice inside a private container.
 
 ## Data Locations
 
+| What               | Where                                |
+| ------------------ | ------------------------------------ |
+| Database           | `~/.config/ManaPOS/manapos.db`       |
+| Receipts           | `~/Documents/POS Reports/Sales/`     |
+| End-of-Day reports | `~/Documents/POS Reports/End Of Day/`|
+| Backups            | `~/Documents/POS Reports/Backups/`   |
 
-| What              | Where                                |
-| ----------------- | ------------------------------------ |
-| Database          | `%APPDATA%/ManaPOS/manapos.db`       |
-| Receipts          | `Documents/POS Reports/Sales/`       |
-| End-of-Day reports| `Documents/POS Reports/End Of Day/`  |
-| Backups           | `Documents/POS Reports/Backups/`     |
+(On minimal systems without XDG user dirs, Electron may resolve Documents to
+the home folder; the app creates every folder it needs on first launch.)
 
 ## License
 
