@@ -106,6 +106,30 @@ prebuilt — do not upgrade Electron without checking prebuilt availability.
 > own install script targets Node, not Electron. Plain `npm install <pkg>` is
 > fine when adding day-to-day dependencies afterwards.
 
+> **Reproducible installs:** to get exactly the tested dependency tree (e.g. on
+> a fresh machine or CI), prefer `npm ci` over `npm install` — it installs
+> straight from `package-lock.json` and never re-resolves versions. This
+> matters for packaging: see Troubleshooting below.
+
+## Troubleshooting
+
+**`npm run dist:linux` fails with `Package subpath ./blake2.js is not defined
+by "exports" in .../@noble/hashes/package.json`**
+
+electron-builder's `app-builder-lib` requires `@noble/hashes/blake2.js`, but
+`@noble/hashes@2.3.0` removed that subpath export. A plain `npm install` can
+pull the newer version and break packaging. The repo pins a known-good version
+via an `overrides` entry in `package.json` (`app-builder-lib` →
+`@noble/hashes@2.2.0`), and `package-lock.json` locks the full tree. Fix:
+
+```bash
+rm -rf node_modules package-lock.json   # only if your tree is already broken
+git checkout package-lock.json          # restore the locked tree
+npm ci                                  # install exactly the pinned versions
+```
+
+Then re-run `npm run dist:linux`.
+
 ## Packaging (AppImage + .deb)
 
 `npm run dist:linux` compiles the app and produces two artifacts in `release/`
